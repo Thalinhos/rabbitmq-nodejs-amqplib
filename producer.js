@@ -1,14 +1,35 @@
+const express = require('express');
 const amqplib = require('amqplib');
+const { exec } = require('child_process');
 
-(async () => {
-  const queue = 'tasks';
-  const conn = await amqplib.connect('amqp://localhost');
+const app = express();
+app.use(express.json());
 
-  const ch2 = await conn.createChannel();
+async function connectRabbitMQ(queue) {
+  const connection = await amqplib.connect('amqp://guest:guest@localhost:5672');
+  const channel = await connection.createChannel();
+  await channel.assertQueue(queue, { durable: true });
+  return channel;
+}
 
-  let numberMsg = 0
-  setInterval(() => {
-    numberMsg += 1;
-    ch2.sendToQueue(queue, Buffer.from(`something to do ${numberMsg}`));
-  }, 1000);
-})();
+
+app.post('/sendMQ', async (req, res) => {
+  try {
+  const { message } = req.body;
+
+  console.log('recebido: ', message)
+  
+  const channel = await connectRabbitMQ('fila_um');
+  const rabbitMessage = message;
+  channel.sendToQueue('fila_um', Buffer.from(rabbitMessage), {persistent: true});
+
+  res.status(200).json({message: "mensagem enviada com sucesso!"})
+    
+  } catch (error) {
+    res.status(400).json({message: "Serviço indisponível."})
+  }
+  
+})
+
+
+app.listen(3001, () => console.log('API rodando na porta 3001'));
